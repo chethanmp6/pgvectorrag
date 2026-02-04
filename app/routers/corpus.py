@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from typing import List
 from uuid import UUID
 
 from app.database import get_db
-from app.models import Corpus
-from app.schemas import CorpusCreate, CorpusResponse
+from app.models import Corpus, File, DocumentChunk
+from app.schemas import CorpusCreate, CorpusResponse, FileResponse
 
 router = APIRouter(prefix="/corpus", tags=["Corpus"])
 
@@ -36,11 +37,16 @@ async def create_corpus(
     await db.commit()
     await db.refresh(new_corpus)
     
-    # Get file count (will be 0 for new corpus)
-    response = CorpusResponse.model_validate(new_corpus)
-    response.file_count = 0
-    
-    return response
+    # Manually construct response to avoid lazy loading 'files' relationship
+    return CorpusResponse(
+        id=new_corpus.id,
+        name=new_corpus.name,
+        description=new_corpus.description,
+        created_at=new_corpus.created_at,
+        updated_at=new_corpus.updated_at,
+        file_count=0,
+        files=[]
+    )
 
 
 @router.get("", response_model=List[CorpusResponse])
@@ -50,7 +56,7 @@ async def list_corpus(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    List all corpus with pagination
+    List all corpus with pagination, including files and counts
     
     Args:
         skip: Number of records to skip
@@ -58,31 +64,45 @@ async def list_corpus(
         db: Database session
         
     Returns:
-        List of corpus
+        List of corpus with file details
     """
-    # Query corpus with file count
-    stmt = (
-        select(Corpus, func.count(Corpus.files).label("file_count"))
-        .outerjoin(Corpus.files)
-        .group_by(Corpus.id)
-        .offset(skip)
-        .limit(limit)
-    )
-    
+    # Query corpus
+    stmt = select(Corpus).offset(skip).limit(limit)
     result = await db.execute(stmt)
-    rows = result.all()
+    corpus_objs = result.scalars().all()
     
-    # Build response
-    corpus_list = []
-    for row in rows:
-        corpus = row[0]
-        file_count = row[1]
+    # For each corpus, fetch files with chunk counts
+    corpus_responses = []
+    for corpus in corpus_objs:
+        # Fetch files with chunk counts for this corpus
+        files_stmt = (
+            select(File, func.count(DocumentChunk.id).label("chunk_count"))
+            .outerjoin(DocumentChunk, File.id == DocumentChunk.file_id)
+            .where(File.corpus_id == corpus.id)
+            .group_by(File.id)
+        )
+        files_result = await db.execute(files_stmt)
+        files_rows = files_result.all()
         
-        corpus_response = CorpusResponse.model_validate(corpus)
-        corpus_response.file_count = file_count
-        corpus_list.append(corpus_response)
+        file_responses = []
+        for row in files_rows:
+            f = row[0]
+            count = row[1]
+            f_resp = FileResponse.model_validate(f)
+            f_resp.chunk_count = count
+            file_responses.append(f_resp)
+        
+        corpus_responses.append(CorpusResponse(
+            id=corpus.id,
+            name=corpus.name,
+            description=corpus.description,
+            created_at=corpus.created_at,
+            updated_at=corpus.updated_at,
+            file_count=len(file_responses),
+            files=file_responses
+        ))
     
-    return corpus_list
+    return corpus_responses
 
 
 @router.get("/{corpus_id}", response_model=CorpusResponse)
@@ -91,39 +111,53 @@ async def get_corpus(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get corpus details by ID
+    Get corpus details by ID, including files and counts
     
     Args:
         corpus_id: Corpus ID
         db: Database session
         
     Returns:
-        Corpus details
+        Corpus details with file details
     """
-    # Query corpus with file count
-    stmt = (
-        select(Corpus, func.count(Corpus.files).label("file_count"))
-        .outerjoin(Corpus.files)
-        .where(Corpus.id == corpus_id)
-        .group_by(Corpus.id)
-    )
-    
+    # Query corpus
+    stmt = select(Corpus).where(Corpus.id == corpus_id)
     result = await db.execute(stmt)
-    row = result.first()
+    corpus = result.scalar_one_or_none()
     
-    if not row:
+    if not corpus:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Corpus with ID {corpus_id} not found"
         )
     
-    corpus = row[0]
-    file_count = row[1]
+    # Fetch files with chunk counts
+    files_stmt = (
+        select(File, func.count(DocumentChunk.id).label("chunk_count"))
+        .outerjoin(DocumentChunk, File.id == DocumentChunk.file_id)
+        .where(File.corpus_id == corpus_id)
+        .group_by(File.id)
+    )
+    files_result = await db.execute(files_stmt)
+    files_rows = files_result.all()
     
-    corpus_response = CorpusResponse.model_validate(corpus)
-    corpus_response.file_count = file_count
+    file_responses = []
+    for row in files_rows:
+        f = row[0]
+        count = row[1]
+        f_resp = FileResponse.model_validate(f)
+        f_resp.chunk_count = count
+        file_responses.append(f_resp)
     
-    return corpus_response
+    return CorpusResponse(
+        id=corpus.id,
+        name=corpus.name,
+        description=corpus.description,
+        created_at=corpus.created_at,
+        updated_at=corpus.updated_at,
+        file_count=len(file_responses),
+        files=file_responses
+    )
 
 
 @router.delete("/{corpus_id}", status_code=status.HTTP_200_OK)

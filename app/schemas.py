@@ -4,6 +4,21 @@ from datetime import datetime
 from uuid import UUID
 
 
+# File Schemas
+class FileResponse(BaseModel):
+    """Schema for file response"""
+    id: UUID
+    corpus_id: UUID
+    filename: str
+    file_size: Optional[int]
+    mime_type: Optional[str]
+    created_at: datetime
+    chunk_count: Optional[int] = 0
+    
+    class Config:
+        from_attributes = True
+
+
 # Corpus Schemas
 class CorpusCreate(BaseModel):
     """Schema for creating a corpus"""
@@ -19,21 +34,7 @@ class CorpusResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     file_count: Optional[int] = 0
-    
-    class Config:
-        from_attributes = True
-
-
-# File Schemas
-class FileResponse(BaseModel):
-    """Schema for file response"""
-    id: UUID
-    corpus_id: UUID
-    filename: str
-    file_size: Optional[int]
-    mime_type: Optional[str]
-    created_at: datetime
-    chunk_count: Optional[int] = 0
+    files: List[FileResponse] = []
     
     class Config:
         from_attributes = True
