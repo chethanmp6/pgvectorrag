@@ -5,13 +5,16 @@ from app.config import settings
 
 
 class EmbeddingService:
-    """Service for generating embeddings using OpenAI"""
+    """Service for generating embeddings using LiteLLM proxy"""
     
     def __init__(self):
-        """Initialize OpenAI client"""
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = "text-embedding-ada-002"
-        self.max_batch_size = 100  # OpenAI limit
+        """Initialize LiteLLM client (OpenAI-compatible)"""
+        self.client = AsyncOpenAI(
+            base_url=settings.litellm_base_url,
+            api_key=settings.litellm_api_key
+        )
+        self.model = settings.litellm_embedding_model
+        self.max_batch_size = 100  # Batch limit
     
     async def generate_embedding(self, text: str) -> List[float]:
         """

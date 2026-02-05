@@ -6,7 +6,7 @@ A production-ready Retrieval-Augmented Generation (RAG) system built with FastAP
 
 - 🗂️ **Corpus Management**: Create, list, retrieve, and delete document collections
 - 📄 **Multi-Format Support**: PDF, DOCX, TXT, and Markdown files
-- 🔍 **Semantic Search**: Vector similarity search using OpenAI embeddings
+- 🔍 **Semantic Search**: Vector similarity search using LiteLLM proxy for embeddings
 - 🚀 **Fast API**: High-performance async FastAPI backend
 - 🐘 **PostgreSQL + pgvector**: Efficient vector storage and retrieval
 - 🐳 **Docker Ready**: Easy deployment with Docker Compose
@@ -30,7 +30,7 @@ A production-ready Retrieval-Augmented Generation (RAG) system built with FastAP
 │  │  Document Processing      │  │
 │  │  - Text Extraction        │  │
 │  │  - Chunking (512 tokens)  │  │
-│  │  - Embedding (ada-002)    │  │
+│  │  - Embedding (LiteLLM)    │  │
 │  └───────────────────────────┘  │
 └────────────┬────────────────────┘
              │
@@ -49,7 +49,7 @@ A production-ready Retrieval-Augmented Generation (RAG) system built with FastAP
 
 - Docker and Docker Compose
 - Python 3.11+
-- OpenAI API key
+- LiteLLM proxy running (with embeddings model configured)
 
 ### Setup
 
@@ -63,9 +63,11 @@ A production-ready Retrieval-Augmented Generation (RAG) system built with FastAP
    cp .env.example .env
    ```
 
-3. **Edit `.env` and add your OpenAI API key**:
+3. **Edit `.env` and configure LiteLLM proxy settings**:
    ```
-   OPENAI_API_KEY=your-actual-api-key-here
+   LITELLM_BASE_URL=http://localhost:4000/v1
+   LITELLM_API_KEY=your-litellm-api-key-here
+   LITELLM_EMBEDDING_MODEL=text-embedding-ada-002
    ```
 
 4. **Start PostgreSQL with pgvector**:
@@ -175,7 +177,9 @@ virtusavertexrag/
 Key environment variables in `.env`:
 
 - `DATABASE_URL`: PostgreSQL connection string
-- `OPENAI_API_KEY`: Your OpenAI API key
+- `LITELLM_BASE_URL`: LiteLLM proxy endpoint (default: http://localhost:4000/v1)
+- `LITELLM_API_KEY`: Your LiteLLM proxy API key
+- `LITELLM_EMBEDDING_MODEL`: Embedding model name (default: text-embedding-ada-002)
 - `CHUNK_SIZE`: Token count per chunk (default: 512)
 - `CHUNK_OVERLAP`: Overlapping tokens (default: 50)
 - `DEFAULT_TOP_K`: Default search results (default: 5)
@@ -185,7 +189,7 @@ Key environment variables in `.env`:
 1. **Upload File**: Files are uploaded to a corpus
 2. **Text Extraction**: Text is extracted based on file type
 3. **Chunking**: Text is split into 512-token chunks with 50-token overlap
-4. **Embedding**: Each chunk is embedded using OpenAI ada-002
+4. **Embedding**: Each chunk is embedded using LiteLLM proxy (OpenAI-compatible)
 5. **Storage**: Chunks and embeddings are stored in PostgreSQL
 6. **Search**: Query is embedded and compared using cosine similarity
 7. **Results**: Top-k most similar chunks are returned

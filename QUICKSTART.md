@@ -3,7 +3,7 @@
 ## Prerequisites
 - Docker and Docker Compose installed
 - Python 3.11+ installed
-- OpenAI API key
+- LiteLLM proxy running at `http://localhost:4000` (with embeddings model configured)
 
 ## Setup Steps
 
@@ -31,9 +31,11 @@ pip install -r requirements.txt
 ```
 
 ### 4. Configure Environment
-Edit `.env` file and add your OpenAI API key:
+Edit `.env` file and configure LiteLLM proxy settings:
 ```bash
-OPENAI_API_KEY=sk-your-actual-api-key-here
+LITELLM_BASE_URL=http://localhost:4000/v1
+LITELLM_API_KEY=sk-your-litellm-api-key-here
+LITELLM_EMBEDDING_MODEL=text-embedding-ada-002
 ```
 
 ### 5. Verify Setup
