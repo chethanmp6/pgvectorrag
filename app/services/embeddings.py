@@ -1,19 +1,17 @@
-from openai import AsyncOpenAI
+import litellm
 from typing import List
-import asyncio
 from app.config import settings
 
 
 class EmbeddingService:
-    """Service for generating embeddings using LiteLLM proxy"""
+    """Service for generating embeddings using LiteLLM SDK with proxy"""
     
     def __init__(self):
-        """Initialize LiteLLM client (OpenAI-compatible)"""
-        self.client = AsyncOpenAI(
-            base_url=settings.litellm_base_url,
-            api_key=settings.litellm_api_key
-        )
-        self.model = settings.litellm_embedding_model
+        """Initialize LiteLLM embedding service"""
+        # Use litellm_proxy/ prefix for proxy routing
+        self.model = f"litellm_proxy/{settings.litellm_embedding_model}"
+        self.api_key = settings.litellm_api_key
+        self.api_base = settings.litellm_base_url
         self.max_batch_size = 100  # Batch limit
     
     async def generate_embedding(self, text: str) -> List[float]:
@@ -27,11 +25,13 @@ class EmbeddingService:
             Embedding vector as list of floats
         """
         try:
-            response = await self.client.embeddings.create(
+            response = await litellm.aembedding(
                 model=self.model,
-                input=text
+                input=[text],
+                api_base=self.api_base,
+                api_key=self.api_key
             )
-            return response.data[0].embedding
+            return response.data[0]['embedding']
         except Exception as e:
             raise ValueError(f"Error generating embedding: {str(e)}")
     
@@ -55,13 +55,15 @@ class EmbeddingService:
             batch = texts[i:i + self.max_batch_size]
             
             try:
-                response = await self.client.embeddings.create(
+                response = await litellm.aembedding(
                     model=self.model,
-                    input=batch
+                    input=batch,
+                    api_base=self.api_base,
+                    api_key=self.api_key
                 )
                 
                 # Extract embeddings in order
-                batch_embeddings = [item.embedding for item in response.data]
+                batch_embeddings = [item['embedding'] for item in response.data]
                 embeddings.extend(batch_embeddings)
                 
             except Exception as e:

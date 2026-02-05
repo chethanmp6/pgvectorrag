@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     corpus_id UUID NOT NULL REFERENCES corpus(id) ON DELETE CASCADE,
     chunk_text TEXT NOT NULL,
     chunk_index INTEGER NOT NULL,
-    embedding vector(1536),  -- OpenAI ada-002 produces 1536-dimensional vectors
+    embedding vector(768),  -- Gemini text-embedding-004 produces 768-dimensional vectors
     extra_metadata JSONB,
     created_at TIMESTAMP DEFAULT NOW(),
     CONSTRAINT fk_file FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,

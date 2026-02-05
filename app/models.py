@@ -49,7 +49,7 @@ class DocumentChunk(Base):
     corpus_id = Column(UUID(as_uuid=True), ForeignKey("corpus.id", ondelete="CASCADE"), nullable=False)
     chunk_text = Column(Text, nullable=False)
     chunk_index = Column(Integer, nullable=False)
-    embedding = Column(Vector(1536))  # OpenAI ada-002 dimension
+    embedding = Column(Vector(768))  # Gemini text-embedding-004 dimension
     extra_metadata = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, server_default=func.now())
     
