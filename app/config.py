@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Ignore extra env vars (e.g., agent-specific vars)
 
 
 # Global settings instance

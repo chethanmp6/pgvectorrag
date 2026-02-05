@@ -6,7 +6,7 @@ import logging
 from typing import Optional
 
 from agent.agent import RAGAgent
-from agent.rag_client import RAGClient
+from agent.tools import SearchTool
 from agent.config import config
 
 # Configure logging
@@ -22,18 +22,23 @@ class RAGAgentCLI:
     
     def __init__(self):
         """Initialize CLI"""
-        self.rag_client = RAGClient(config.rag_api_base_url)
-        self.agent = RAGAgent(self.rag_client, config)
-        self.current_corpus_id: Optional[str] = None
-        self.current_corpus_name: Optional[str] = None
+        # Validate corpus_id is set
+        if not config.corpus_id:
+            print("❌ Error: CORPUS_ID not set in .env")
+            print("   Please add: CORPUS_ID=your-corpus-uuid-here")
+            sys.exit(1)
+        
+        # Initialize search tool with direct database access
+        self.search_tool = SearchTool(
+            database_url=config.database_url,
+            corpus_id=config.corpus_id
+        )
+        self.agent = RAGAgent(self.search_tool, config)
     
     async def run(self):
         """Main CLI loop"""
         try:
             self._print_header()
-            
-            # Select corpus
-            await self._select_corpus()
             
             # Show help
             self._show_help()
@@ -48,15 +53,14 @@ class RAGAgentCLI:
                     
                     # Handle commands
                     if user_input.startswith("/"):
-                        await self._handle_command(user_input)
+                        should_continue = await self._handle_command(user_input)
+                        if not should_continue:
+                            break
                         continue
                     
-                    # Process message
+                    # Process message (no corpus_id needed)
                     print("\n🤔 Thinking...")
-                    response = await self.agent.process_message(
-                        user_input, 
-                        self.current_corpus_id
-                    )
+                    response = await self.agent.process_message(user_input)
                     
                     print(f"\n🤖 Agent >\n{response}")
                     
@@ -70,72 +74,32 @@ class RAGAgentCLI:
                     print(f"\n❌ Error: {str(e)}")
         
         finally:
-            await self.rag_client.close()
+            await self.search_tool.close()
             print("\n👋 Goodbye!")
     
     def _print_header(self):
         """Print welcome header"""
         print("=" * 70)
-        print("🤖 RAG Search Agent".center(70))
+        print("🤖 RAG Search Agent (Direct Database)".center(70))
         print("=" * 70)
         print("\nAI-powered conversational search for your documents")
         print(f"Using LiteLLM Proxy: {config.litellm_base_url}")
-        print(f"RAG API: {config.rag_api_base_url}")
+        print(f"Corpus ID: {config.corpus_id}")
+        print(f"Database: {config.database_url.split('@')[1] if '@' in config.database_url else 'localhost'}")
         print()
     
-    async def _select_corpus(self):
-        """Let user select corpus"""
-        try:
-            corpus_list = await self.rag_client.list_corpus()
-            
-            if not corpus_list:
-                print("❌ No corpus found. Please create one first via Swagger UI.")
-                print(f"   Visit: {config.rag_api_base_url}/docs")
-                sys.exit(1)
-            
-            print("📚 Available Corpus:")
-            print("-" * 70)
-            for i, corpus in enumerate(corpus_list, 1):
-                file_count = corpus.get('file_count', 0)
-                print(f"  [{i}] {corpus['name']}")
-                print(f"      {corpus.get('description', 'No description')}")
-                print(f"      Files: {file_count}")
-                print()
-            
-            while True:
-                try:
-                    choice_input = input("Select corpus number: ").strip()
-                    choice = int(choice_input) - 1
-                    
-                    if 0 <= choice < len(corpus_list):
-                        selected = corpus_list[choice]
-                        self.current_corpus_id = selected['id']
-                        self.current_corpus_name = selected['name']
-                        print(f"\n✅ Using corpus: {self.current_corpus_name}")
-                        break
-                    else:
-                        print(f"Please enter a number between 1 and {len(corpus_list)}")
-                except ValueError:
-                    print("Please enter a valid number")
-                except KeyboardInterrupt:
-                    print("\n\nExiting...")
-                    sys.exit(0)
-        
-        except Exception as e:
-            logger.error(f"Error selecting corpus: {e}")
-            print(f"❌ Error connecting to RAG API: {str(e)}")
-            print(f"   Make sure the RAG API is running at {config.rag_api_base_url}")
-            sys.exit(1)
     
-    async def _handle_command(self, command: str):
-        """Handle special commands"""
+    async def _handle_command(self, command: str) -> bool:
+        """
+        Handle special commands
+        
+        Returns:
+            True to continue, False to exit
+        """
         cmd = command.lower().strip()
         
         if cmd == "/help":
             self._show_help()
-        
-        elif cmd == "/corpus":
-            await self._select_corpus()
         
         elif cmd == "/history":
             self._show_history()
@@ -145,16 +109,16 @@ class RAGAgentCLI:
             print("✅ Conversation history cleared")
         
         elif cmd == "/info":
-            await self._show_corpus_info()
+            self._show_info()
         
         elif cmd == "/exit" or cmd == "/quit":
-            print("\n👋 Goodbye!")
-            await self.rag_client.close()
-            sys.exit(0)
+            return False
         
         else:
             print(f"❌ Unknown command: {command}")
             print("   Type /help for available commands")
+        
+        return True
     
     def _show_help(self):
         """Show help message"""
@@ -162,10 +126,9 @@ class RAGAgentCLI:
         print("📖 Available Commands".center(70))
         print("=" * 70)
         print("  /help     - Show this help message")
-        print("  /corpus   - Switch to a different corpus")
         print("  /history  - Show conversation history")
         print("  /clear    - Clear conversation history")
-        print("  /info     - Show current corpus information")
+        print("  /info     - Show agent information")
         print("  /exit     - Exit the agent")
         print("\n💡 Tip: Just type your question to search the documents!")
         print("=" * 70)
@@ -188,30 +151,18 @@ class RAGAgentCLI:
         
         print("=" * 70)
     
-    async def _show_corpus_info(self):
-        """Show current corpus information"""
-        try:
-            corpus_info = await self.rag_client.get_corpus(self.current_corpus_id)
-            
-            print("\n" + "=" * 70)
-            print("📚 Corpus Information".center(70))
-            print("=" * 70)
-            print(f"Name: {corpus_info['name']}")
-            print(f"Description: {corpus_info.get('description', 'No description')}")
-            print(f"Files: {corpus_info.get('file_count', 0)}")
-            print(f"Created: {corpus_info.get('created_at', 'Unknown')}")
-            
-            if corpus_info.get('files'):
-                print("\n📄 Files in corpus:")
-                for file in corpus_info['files']:
-                    chunks = file.get('chunk_count', 0)
-                    print(f"  - {file['filename']} ({chunks} chunks)")
-            
-            print("=" * 70)
-        
-        except Exception as e:
-            logger.error(f"Error getting corpus info: {e}")
-            print(f"❌ Error: {str(e)}")
+    
+    def _show_info(self):
+        """Show agent information"""
+        print("\n" + "=" * 70)
+        print("� Agent Information".center(70))
+        print("=" * 70)
+        print(f"Model: {config.litellm_chat_model}")
+        print(f"Temperature: {config.temperature}")
+        print(f"Top-K Results: {config.default_top_k}")
+        print(f"Corpus ID: {config.corpus_id}")
+        print(f"Conversation History: {len(self.agent.get_conversation_history())} exchanges")
+        print("=" * 70)
 
 
 async def main():

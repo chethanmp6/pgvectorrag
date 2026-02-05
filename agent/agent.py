@@ -4,7 +4,7 @@ from openai import AsyncOpenAI
 from typing import List, Dict, Tuple
 import logging
 
-from agent.rag_client import RAGClient
+from agent.tools import SearchTool
 from agent.config import AgentConfig
 
 logger = logging.getLogger(__name__)
@@ -13,15 +13,15 @@ logger = logging.getLogger(__name__)
 class RAGAgent:
     """AI agent for conversational RAG search"""
     
-    def __init__(self, rag_client: RAGClient, config: AgentConfig):
+    def __init__(self, search_tool: SearchTool, config: AgentConfig):
         """
         Initialize RAG agent
         
         Args:
-            rag_client: RAG API client
+            search_tool: Search tool for direct database access
             config: Agent configuration
         """
-        self.rag_client = rag_client
+        self.search_tool = search_tool
         self.config = config
         
         # Initialize LiteLLM client (OpenAI-compatible)
@@ -36,15 +36,13 @@ class RAGAgent:
     
     async def process_message(
         self, 
-        user_message: str, 
-        corpus_id: str
+        user_message: str
     ) -> str:
         """
         Process user message and return response
         
         Args:
             user_message: User's question or message
-            corpus_id: UUID of corpus to search
             
         Returns:
             Agent's response with answer and sources
@@ -55,13 +53,12 @@ class RAGAgent:
             search_query = await self._extract_query(user_message)
             logger.info(f"Extracted query: {search_query}")
             
-            # 2. Search RAG system
-            results = await self.rag_client.search(
-                corpus_id, 
+            # 2. Search using direct database access
+            results = await self.search_tool.search(
                 search_query, 
                 top_k=self.config.default_top_k
             )
-            logger.info(f"Found {results['total_results']} results")
+            logger.info(f"Found {len(results)} results")
             
             # 3. Format response using LiteLLM
             response = await self._format_response(user_message, results)
@@ -112,14 +109,14 @@ class RAGAgent:
     async def _format_response(
         self, 
         user_query: str, 
-        search_results: Dict
+        search_results: List[Dict]
     ) -> str:
         """
         Use LiteLLM to synthesize answer from search results
         
         Args:
             user_query: Original user question
-            search_results: Results from RAG search
+            search_results: List of search results from SearchTool
             
         Returns:
             Formatted response with answer and sources
@@ -169,13 +166,13 @@ Please answer the question based on these search results."""
             # Fallback to simple formatting
             return self._simple_format_results(search_results)
     
-    def _format_results_for_llm(self, search_results: Dict) -> str:
+    def _format_results_for_llm(self, search_results: List[Dict]) -> str:
         """Format search results as context for LLM"""
-        if not search_results.get('results'):
+        if not search_results:
             return "No relevant documents found."
         
         formatted = []
-        for i, result in enumerate(search_results['results'], 1):
+        for i, result in enumerate(search_results, 1):
             formatted.append(
                 f"[Document {i}]\n"
                 f"File: {result['filename']}\n"
@@ -185,13 +182,13 @@ Please answer the question based on these search results."""
         
         return "\n".join(formatted)
     
-    def _simple_format_results(self, search_results: Dict) -> str:
+    def _simple_format_results(self, search_results: List[Dict]) -> str:
         """Simple fallback formatting without LLM"""
-        if not search_results.get('results'):
+        if not search_results:
             return "I couldn't find any relevant information in the documents."
         
         response = "Here's what I found:\n\n"
-        for result in search_results['results'][:3]:
+        for result in search_results[:3]:
             response += f"📄 {result['filename']}\n"
             response += f"   {result['chunk_text'][:200]}...\n"
             response += f"   (similarity: {result['similarity_score']:.2f})\n\n"
