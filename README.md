@@ -43,6 +43,25 @@ A production-ready Retrieval-Augmented Generation (RAG) system built with FastAP
 └─────────────────────────────────┘
 ```
 
+## Agent Architecture
+
+The system includes an AI-powered conversational search agent with direct database access:
+
+```
+User → Agent CLI → SearchTool → PostgreSQL (Direct)
+           ↓
+      LiteLLM Proxy (Query Understanding & Response Synthesis)
+```
+
+**Agent Features:**
+- 🤖 Natural language queries
+- ⚡ Direct database access (~50-100ms faster than HTTP)
+- 🧠 LiteLLM-powered query extraction and response synthesis
+- 📝 Conversation history
+- 📊 Source citations
+
+See [`agent/README.md`](agent/README.md) for agent documentation.
+
 ## Quick Start
 
 ### Prerequisites
@@ -164,7 +183,17 @@ virtusavertexrag/
 │       ├── document_processor.py
 │       ├── chunking.py
 │       ├── embeddings.py
-│       └── vector_store.py
+│       ├── vector_store.py
+│       └── search_service.py
+├── agent/
+│   ├── main.py              # Agent CLI
+│   ├── agent.py             # Core agent logic
+│   ├── config.py            # Agent configuration
+│   ├── tools/
+│   │   ├── search_tool.py   # Direct database search
+│   │   └── README.md        # Tool documentation
+│   └── examples/
+│       └── search_tool_example.py
 ├── database/
 │   └── init.sql             # Database schema
 ├── docker-compose.yml
@@ -174,15 +203,46 @@ virtusavertexrag/
 
 ## Configuration
 
-Key environment variables in `.env`:
+All configuration must be set in `.env` file (no hardcoded defaults):
 
-- `DATABASE_URL`: PostgreSQL connection string
-- `LITELLM_BASE_URL`: LiteLLM proxy endpoint (default: http://localhost:4000/v1)
-- `LITELLM_API_KEY`: Your LiteLLM proxy API key
-- `LITELLM_EMBEDDING_MODEL`: Embedding model name (default: text-embedding-ada-002)
-- `CHUNK_SIZE`: Token count per chunk (default: 512)
-- `CHUNK_OVERLAP`: Overlapping tokens (default: 50)
-- `DEFAULT_TOP_K`: Default search results (default: 5)
+### Required Variables
+
+```bash
+# Database
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/ragdb
+
+# LiteLLM Proxy
+LITELLM_BASE_URL=http://localhost:4000/v1
+LITELLM_API_KEY=your-litellm-api-key-here
+LITELLM_EMBEDDING_MODEL=text-embedding-ada-002
+```
+
+### Optional Variables
+
+```bash
+# Application
+APP_HOST=0.0.0.0
+APP_PORT=8000
+
+# Chunking
+CHUNK_SIZE=512
+CHUNK_OVERLAP=50
+
+# Search
+DEFAULT_TOP_K=5
+```
+
+### Agent-Specific Variables
+
+For the conversational agent, also add:
+
+```bash
+# Agent Configuration
+CORPUS_ID=your-corpus-uuid-here
+LITELLM_CHAT_MODEL=gemini-2.5-flash
+AGENT_TEMPERATURE=0.7
+MAX_CONVERSATION_HISTORY=10
+```
 
 ## How It Works
 

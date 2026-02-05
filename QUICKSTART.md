@@ -31,11 +31,18 @@ pip install -r requirements.txt
 ```
 
 ### 4. Configure Environment
-Edit `.env` file and configure LiteLLM proxy settings:
+**IMPORTANT**: All values must be set in `.env` (no defaults):
+
 ```bash
+# Required for RAG API
+DATABASE_URL=postgresql+asyncpg://litellm_user:password@localhost:5432/ragdb
 LITELLM_BASE_URL=http://localhost:4000/v1
 LITELLM_API_KEY=sk-your-litellm-api-key-here
 LITELLM_EMBEDDING_MODEL=text-embedding-ada-002
+
+# Optional for Agent
+CORPUS_ID=your-corpus-uuid-here
+LITELLM_CHAT_MODEL=gemini-2.5-flash
 ```
 
 ### 5. Verify Setup
