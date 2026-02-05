@@ -6,12 +6,12 @@ class Settings(BaseSettings):
     """Application configuration settings"""
     
     # Database
-    database_url: str = "postgresql+asyncpg://raguser:ragpassword@localhost:5432/ragdb"
+    database_url: str
     
     # LiteLLM Proxy Configuration
-    litellm_base_url: str = "http://localhost:4000/v1"
-    litellm_api_key: str = "sk-3cPU913F4530vHZvmpxOWA"
-    litellm_embedding_model: str = "text-embedding-ada-002"
+    litellm_base_url: str
+    litellm_api_key: str
+    litellm_embedding_model: str
     
     # Application
     app_host: str = "0.0.0.0"
